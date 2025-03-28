@@ -1,7 +1,6 @@
 from abc import ABCMeta, abstractmethod
 
 import numpy as np
-from glmnet import LogitNet
 from sklearn import linear_model
 
 from abcpy.utils import wass_dist
@@ -183,86 +182,6 @@ class Euclidean(Distance):
             The maximal possible value of the desired distance function.
         """
         return np.inf
-
-
-class PenLogReg(Distance):
-    """
-    This class implements a distance measure based on the classification accuracy.
-
-    The classification accuracy is calculated between two dataset d1 and d2 using
-    lasso penalized logistics regression and return it as a distance. The lasso
-    penalized logistic regression is done using glmnet package of Friedman et. al.
-    [2]. While computing the distance, the algorithm automatically chooses
-    the most relevant summary statistics as explained in Gutmann et. al. [1].
-    The maximum value of the distance is 1.0.
-
-    [1] Gutmann, M. U., Dutta, R., Kaski, S., & Corander, J. (2018). Likelihood-free inference via classification.
-    Statistics and Computing, 28(2), 411-425.
-
-    [2] Friedman, J., Hastie, T., and Tibshirani, R. (2010). Regularization
-    paths for generalized linear models via coordinate descent. Journal of Statistical
-    Software, 33(1), 1–22.
-    """
-
-    def __init__(self, statistics):
-        """
-        Parameters
-        ----------
-        statistics_calc : abcpy.statistics.Statistics
-            Statistics extractor object that conforms to the Statistics class.
-        """
-        super(PenLogReg, self).__init__(statistics)
-
-        self.n_folds = 10  # for cross validation in PenLogReg
-
-    def distance(self, d1, d2):
-        """Calculates the distance between two datasets.
-
-        Parameters
-        ----------
-        d1: Python list
-            Contains n1 data points.
-        d2: Python list
-            Contains n2 data points.
-
-        Returns
-        -------
-        numpy.float
-            The distance between the two input data sets.
-        """
-        s1, s2 = self._calculate_summary_stat(d1, d2)
-        self.n_simulate = s1.shape[0]
-
-        if not s2.shape[0] == self.n_simulate:
-            raise RuntimeError("The number of simulations in the two data sets should be the same in order for "
-                               "the classification accuracy implemented in PenLogReg to be a proper distance. Please "
-                               "check that `n_samples` in the `sample()` method for the sampler is equal to "
-                               "the number of datasets in the observations.")
-
-        # compute distance between the statistics
-        training_set_features = np.concatenate((s1, s2), axis=0)
-        label_s1 = np.zeros(shape=(len(s1), 1))
-        label_s2 = np.ones(shape=(len(s2), 1))
-        training_set_labels = np.concatenate((label_s1, label_s2), axis=0).ravel()
-
-        groups = np.repeat(np.arange(self.n_folds), np.int(np.ceil(self.n_simulate / self.n_folds)))
-        groups = groups[:self.n_simulate].tolist()
-        groups += groups  # duplicate it as groups need to be defined for both datasets
-        m = LogitNet(alpha=1, n_splits=self.n_folds)  # note we are not using random seed here!
-        m = m.fit(training_set_features, training_set_labels, groups=groups)
-        distance = 2.0 * (m.cv_mean_score_[np.where(m.lambda_path_ == m.lambda_max_)[0][0]] - 0.5)
-
-        return distance
-
-    def dist_max(self):
-        """
-        Returns
-        -------
-        numpy.float
-            The maximal possible value of the desired distance function.
-        """
-        return 1.0
-
 
 class LogReg(Distance):
     """This class implements a distance measure based on the classification
